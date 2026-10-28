@@ -1,0 +1,40 @@
+name: weekly-mis-report
+
+on:
+  schedule:
+    - cron: "30 2 * * 1"      # every Monday 02:30 UTC (08:00 IST)
+  workflow_dispatch:           # run it by hand from the Actions tab
+
+jobs:
+  build-report:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: src
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        run: pytest -q
+
+      # Uses Claude for the commentary when the ANTHROPIC_API_KEY repository secret exists,
+      # otherwise the offline template. The job fails (no report) if a data check fails or a
+      # commentary figure does not match the KPI table.
+      - name: Build MIS report
+        run: python -m mis.run --commentary auto
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: payments-mis-report
+          path: outputs/*.xlsx
+          if-no-files-found: error
